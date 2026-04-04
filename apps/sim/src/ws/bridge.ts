@@ -1,31 +1,58 @@
-import { useSimStore } from "../store";
+import { useSimStore } from "../store/index.js";
+import type { WsMessage } from "../../../../mcp-servers/orbital/src/types.js";
 
-export type BridgeMessage =
-  | { type: "bodies"; payload: Parameters<ReturnType<typeof useSimStore.getState>["setBodies"]>[0] }
-  | { type: "playback"; payload: ReturnType<typeof useSimStore.getState>["playback"] }
-  | { type: "tick"; payload: { deltaSeconds: number } };
+// Re-export WsMessage so App.tsx can use it if needed
+export type { WsMessage };
 
 let socket: WebSocket | null = null;
 
-export function connectBridge(wsUrl = "/ws"): () => void {
+export function connectBridge(wsUrl = "ws://localhost:8080"): () => void {
   socket = new WebSocket(wsUrl);
 
+  socket.onopen = () => {
+    console.log("[bridge] connected to orbital MCP server");
+  };
+
   socket.onmessage = (event: MessageEvent<string>) => {
-    let msg: BridgeMessage;
+    let msg: WsMessage;
     try {
-      msg = JSON.parse(event.data) as BridgeMessage;
+      msg = JSON.parse(event.data) as WsMessage;
     } catch {
-      console.warn("[bridge] bad message", event.data);
+      console.warn("[bridge] unparseable message", event.data);
       return;
     }
 
     const store = useSimStore.getState();
-    if (msg.type === "bodies") store.setBodies(msg.payload);
-    else if (msg.type === "playback") store.setPlayback(msg.payload);
-    else if (msg.type === "tick") store.tickTime(msg.payload.deltaSeconds);
+
+    switch (msg.type) {
+      case "load_scene":
+        store.loadScene(msg.payload.id);
+        break;
+      case "set_body":
+        store.setBody(msg.payload);
+        break;
+      case "control_sim":
+        store.setPlayback(msg.payload.action === "reset" ? "stopped" : msg.payload.action as "playing" | "paused" | "stopped");
+        if (msg.payload.timeScale !== undefined) store.setTimeScale(msg.payload.timeScale);
+        if (msg.payload.action === "reset") store.reset();
+        break;
+      case "set_camera":
+        store.setCamera(msg.payload);
+        break;
+      case "add_label":
+        store.addLabel(msg.payload);
+        break;
+      default:
+        console.warn("[bridge] unknown message type:", (msg as { type: string }).type);
+    }
   };
 
   socket.onerror = (e) => console.error("[bridge] error", e);
+
+  socket.onclose = () => {
+    console.log("[bridge] disconnected");
+    socket = null;
+  };
 
   return () => {
     socket?.close();
@@ -33,9 +60,9 @@ export function connectBridge(wsUrl = "/ws"): () => void {
   };
 }
 
-export function sendBridgeMessage(msg: BridgeMessage): void {
+export function sendBridgeMessage(msg: WsMessage): void {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
-    console.warn("[bridge] socket not open");
+    console.warn("[bridge] socket not open, dropping message:", msg.type);
     return;
   }
   socket.send(JSON.stringify(msg));
