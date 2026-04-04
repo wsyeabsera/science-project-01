@@ -1,0 +1,43 @@
+<h2>How do scenes get from Studio → Sim?</h2>
+<p class="subtitle">This is the central design decision — everything else follows from it.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>File-based</h3>
+      <p>Studio saves scenes as JSON files. Sim watches the filesystem and loads them on demand. Simple, durable, no live sync.</p>
+      <div style="margin-top:12px;font-family:monospace;font-size:12px;color:#aaa;line-height:1.6">
+        Studio → writes → <code>scenes/solar-system.json</code><br>
+        Sim → reads → file on load / manual refresh<br>
+        MCP → reads same files → exposes via tools
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Live WebSocket sync</h3>
+      <p>Studio pushes scene changes in real time through the MCP server's WebSocket to Sim. No files — the scene lives in memory.</p>
+      <div style="margin-top:12px;font-family:monospace;font-size:12px;color:#aaa;line-height:1.6">
+        Studio → WS push → MCP server → WS broadcast → Sim<br>
+        Changes appear instantly with no manual step<br>
+        MCP / Claude can also push scenes the same way
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid: files + live push</h3>
+      <p>Studio saves to JSON (durable). Also has a "push to sim" button that sends the current scene over WebSocket for instant preview. Best of both.</p>
+      <div style="margin-top:12px;font-family:monospace;font-size:12px;color:#aaa;line-height:1.6">
+        Studio → saves → <code>scenes/*.json</code> (persistent)<br>
+        Studio → "▶ Run in Sim" → WS push (live preview)<br>
+        MCP → can load any saved scene by name
+      </div>
+    </div>
+  </div>
+</div>
