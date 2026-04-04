@@ -1,9 +1,8 @@
 {
   "mcpServers": {
     "orbital": {
-      "command": "node",
-      "args": ["dist/index.js"],
-      "cwd": "/Users/yab/Projects/science-project-01/mcp-servers/orbital"
+      "command": "/Users/yab/.nvm/versions/node/v22.19.0/bin/node",
+      "args": ["/Users/yab/Projects/science-project-01/mcp-servers/orbital/dist/index.js"]
     }
   }
 }

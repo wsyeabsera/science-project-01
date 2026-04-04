@@ -13,9 +13,12 @@
   },
   "dependencies": {
     "@astrophysics-playground/ui": "workspace:*",
+    "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^8.16.0",
+    "@types/three": "^0.164.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "three": "^0.164.0",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

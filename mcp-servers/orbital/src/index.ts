@@ -54,4 +54,4 @@ startWsServer();
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.log("[orbital-mcp] server ready — 8 tools registered");
+console.error("[orbital-mcp] server ready — 8 tools registered");

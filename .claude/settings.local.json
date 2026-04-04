@@ -8,9 +8,36 @@
       "Bash(pnpm build:*)",
       "Bash(pnpm type-check:*)",
       "Bash(timeout 3 node dist/index.js)",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(pnpm:*)",
+      "mcp__chrome-devtools__navigate_page",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5174)",
+      "Bash(echo \"PID: $!\")",
+      "mcp__chrome-devtools__take_screenshot",
+      "mcp__chrome-devtools__list_console_messages",
+      "Read(//Users/yab/.claude/**)",
+      "Bash(nohup node:*)",
+      "Bash(echo \"PID: $!\" sleep 2)",
+      "mcp__chrome-devtools__evaluate_script",
+      "Bash(node /Users/yab/Projects/science-project-01/mcp-servers/orbital/dist/index.js)",
+      "Bash(timeout 5 node mcp-servers/orbital/dist/index.js)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(timeout 5 /Users/yab/.nvm/versions/node/v22.19.0/bin/node mcp-servers/orbital/dist/index.js)",
+      "Bash(/Users/yab/.nvm/versions/node/v22.19.0/bin/node mcp-servers/orbital/dist/index.js)",
+      "Bash(kill %1)",
+      "Bash(kill 62446)",
+      "Bash(timeout 5 /Users/yab/.nvm/versions/node/v22.19.0/bin/node /Users/yab/Projects/science-project-01/mcp-servers/orbital/dist/index.js)",
+      "mcp__orbital__load_scene",
+      "mcp__orbital__set_body",
+      "mcp__orbital__control_sim",
+      "Bash(kill 71474)",
+      "Bash(kill 71705)"
     ]
   },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "orbital"
+  ],
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true
   }
