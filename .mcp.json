@@ -1,10 +1,9 @@
 {
   "mcpServers": {
     "orbital": {
-      "type": "stdio",
       "command": "node",
       "args": ["dist/index.js"],
-      "cwd": "mcp-servers/orbital"
+      "cwd": "/Users/yab/Projects/science-project-01/mcp-servers/orbital"
     }
   }
 }
