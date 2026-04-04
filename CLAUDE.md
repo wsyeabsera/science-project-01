@@ -26,6 +26,8 @@ Do all of these without asking for permission:
 
 ## Visual Review — Mandatory After Every Visual Change
 
+**Prerequisite:** Ensure the dev server is running (`turbo run dev`) before starting this loop.
+
 After any change to a component, scene, shader, or Three.js code:
 
 1. `mcp__chrome-devtools__navigate_page` → http://localhost:5174
@@ -33,9 +35,11 @@ After any change to a component, scene, shader, or Three.js code:
 3. Wait 3 seconds (textures load async — do not skip this)
 4. `mcp__chrome-devtools__take_screenshot`
 5. Evaluate against visual standards (visual-reviewer skill)
-6. `mcp__chrome-devtools__get_console_message` → check for errors
+6. `mcp__chrome-devtools__list_console_messages` → check for errors
 7. If anything fails: fix silently, restart from step 1
 8. Only declare done when all checks pass
+
+**Note:** When editing shared components in `packages/ui/`, review BOTH `http://localhost:5174` (sim) AND `http://localhost:5173` (studio) since changes affect both applications.
 
 Never say "looks good" based on code alone. Always screenshot.
 
@@ -44,6 +48,7 @@ Never say "looks good" based on code alone. Always screenshot.
 - Design decisions with no clear better answer (ring shadow rendering approach, which moons to show)
 - Changes to the MCP server's public API shape (tool names, parameter schemas)
 - Scientific accuracy tradeoffs (Keplerian approximation vs full n-body)
+- Major package dependency changes (adding/removing packages, significant version upgrades)
 
 Everything else: decide and do.
 
