@@ -275,6 +275,83 @@ mcp-servers/orbital/src/tools/       ← expanded MCP tools
 
 ---
 
+## Layer 4: Self-Improvement System
+
+The skill system learns from every session. Claude logs, updates, and refines autonomously — git is the review mechanism.
+
+### Feedback Log
+
+**`logs/skill-feedback.jsonl`** — Claude appends one entry per meaningful event:
+
+```jsonl
+{"ts":"2026-04-04T21:00:00Z","type":"error","skill":"scene-builder","issue":"UnrealBloomPass import path changed in Three.js r162","resolution":"Use `import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js'`","skill_updated":true}
+{"ts":"2026-04-04T21:05:00Z","type":"gap","skill":null,"issue":"No guidance for Saturn ring shadow casting","resolution":"pending","skill_updated":false}
+{"ts":"2026-04-04T21:10:00Z","type":"success","skill":"orbital-mechanics","issue":null,"resolution":"Kepler Newton-Raphson converged in 4 iterations for all planets","skill_updated":false}
+{"ts":"2026-04-04T21:15:00Z","type":"improvement","skill":"visual-reviewer","issue":"Screenshot taken before Three.js finished loading textures","resolution":"Increased wait to 3s + poll for canvas readState","skill_updated":true}
+```
+
+Entry types:
+- `error` — bug hit and fixed. Always log resolution + whether skill was updated.
+- `gap` — needed guidance that no skill provided. Triggers skill creation when seen twice.
+- `success` — something worked well. Reinforces patterns worth keeping.
+- `improvement` — a better way to do something found mid-session.
+
+**`logs/gaps.md`** — human-readable gap tracker. Claude appends gaps here too. When a gap appears twice across sessions, Claude either extends an existing skill or creates a new one.
+
+```markdown
+## Open Gaps
+
+### [2026-04-04] Saturn ring shadow casting
+Needed: guidance on whether to use Three.js shadow maps or a custom shader for ring-planet shadows.
+Seen: 1x — monitor.
+
+### [2026-04-04] Cesium + Three.js shared animation loop
+Needed: exact pattern for synchronising Cesium's render loop with Three.js EffectComposer.
+Seen: 1x — monitor.
+```
+
+### Autonomous Skill Update Rules (encoded in CLAUDE.md)
+
+Claude follows these rules without being asked:
+
+1. **Fix immediately:** when a skill contains wrong or outdated information (wrong import path, bad API, broken texture URL) — fix the SKILL.md right now, log it, commit.
+2. **Update on second occurrence:** when the same gap appears twice across sessions — add it to the relevant skill or create a new one. Don't wait for explicit instruction.
+3. **Log every session:** after any session where something was built, reviewed, or broke — append to `logs/skill-feedback.jsonl`. Takes 30 seconds. Non-negotiable.
+4. **Never silently discard a fix:** if you solved something by trial and error, the solution goes in the skill so next session starts ahead of where this one did.
+
+### `skill-refiner` — the fifth skill
+
+**Trigger:** "refine skills", "review what we've learned", or after 5+ sessions automatically.
+
+**What it does:**
+1. Read `logs/skill-feedback.jsonl` — extract all unresolved gaps and recurring errors
+2. Read `logs/gaps.md` — identify gaps seen 2+ times
+3. For each actionable finding: update the relevant SKILL.md or create a new skill
+4. Summarise what changed (one-line per skill) and commit with message `chore(skills): autonomous refinement — <date>`
+5. Clear resolved entries from gaps.md
+
+This is the skill that maintains all other skills. The system compounds: each session makes the next one faster, more accurate, and more autonomous.
+
+### Updated File Layout
+
+```
+.claude/
+  CLAUDE.md
+
+~/.claude/skills/
+  scene-builder/SKILL.md
+  visual-reviewer/SKILL.md
+  orbital-mechanics/SKILL.md
+  scene-scripter/SKILL.md
+  skill-refiner/SKILL.md          ← new: maintains the other four
+
+logs/
+  skill-feedback.jsonl             ← structured event log (Claude appends)
+  gaps.md                          ← human-readable gap tracker
+```
+
+---
+
 ## Success Criteria
 
 1. "Build the solar system" → Claude builds a beautiful, scientifically labeled scene, reviews it in Chrome, iterates until passing all checklist items, without asking permission once
@@ -283,3 +360,6 @@ mcp-servers/orbital/src/tools/       ← expanded MCP tools
 4. All 8 planets visible with correct relative distances and exaggerated-but-proportional sizes
 5. Orbit paths, sun glow, atmosphere shaders present in the first build
 6. Chrome screenshot review catches and fixes at least one issue per build cycle
+7. After every session, `logs/skill-feedback.jsonl` has new entries
+8. After 2 sessions, at least one skill has been autonomously updated based on logged learnings
+9. `skill-refiner` can run unattended and produce a meaningful commit
