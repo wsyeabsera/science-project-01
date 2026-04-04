@@ -7,7 +7,7 @@ export type BridgeMessage =
 
 let socket: WebSocket | null = null;
 
-export function connectBridge(wsUrl = "ws://localhost:8080"): () => void {
+export function connectBridge(wsUrl = "/ws"): () => void {
   socket = new WebSocket(wsUrl);
 
   socket.onmessage = (event: MessageEvent<string>) => {

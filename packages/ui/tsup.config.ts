@@ -6,6 +6,6 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  external: ["react", "react-dom", "three", "cesium"],
+  external: ["react", "react-dom", "three", "cesium", "@react-three/fiber", "@react-three/drei"],
   treeshake: true,
 });
