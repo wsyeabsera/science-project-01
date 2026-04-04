@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "orbital": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["dist/index.js"],
+      "cwd": "mcp-servers/orbital"
+    }
+  }
+}
