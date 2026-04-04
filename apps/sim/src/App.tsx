@@ -66,13 +66,13 @@ function SaturnRings(props: { innerRadius: number; outerRadius: number }) {
 }
 
 // ── Sun ──────────────────────────────────────────────────────────────────────
-function SunInner({ body }: { body: Body }) {
+function SunInner({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Body) => void }) {
   const pos = body.position as [number, number, number];
   const texture = useTexture(TEXTURE_PATHS.sun);
   texture.colorSpace = THREE.SRGBColorSpace;
 
   return (
-    <group position={pos}>
+    <group position={pos} onClick={onSelectBody ? (e) => { e.stopPropagation(); onSelectBody(body); } : undefined}>
       <mesh>
         <sphereGeometry args={[body.radius, 48, 48]} />
         <meshStandardMaterial
@@ -109,11 +109,11 @@ function SunInner({ body }: { body: Body }) {
   );
 }
 
-function Sun({ body }: { body: Body }) {
+function Sun({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Body) => void }) {
   const pos = body.position as [number, number, number];
   return (
     <Suspense fallback={
-      <group position={pos}>
+      <group position={pos} onClick={onSelectBody ? (e) => { e.stopPropagation(); onSelectBody(body); } : undefined}>
         <mesh>
           <sphereGeometry args={[body.radius, 48, 48]} />
           <meshStandardMaterial color={body.color} emissive={new THREE.Color(body.color)} emissiveIntensity={3} />
@@ -121,7 +121,7 @@ function Sun({ body }: { body: Body }) {
         <pointLight color="#ffffff" intensity={60} decay={1} />
       </group>
     }>
-      <SunInner body={body} />
+      <SunInner body={body} onSelectBody={onSelectBody} />
     </Suspense>
   );
 }
@@ -151,7 +151,7 @@ function EarthCloudsInner({ r }: { r: number }) {
 }
 
 // ── Planet ────────────────────────────────────────────────────────────────────
-function PlanetInner({ body }: { body: Body }) {
+function PlanetInner({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Body) => void }) {
   const r = Math.max(body.radius * PLANET_SCALE, MIN_RADIUS);
   const pos = body.position as [number, number, number];
   const isEarth = body.id === "earth";
@@ -169,7 +169,7 @@ function PlanetInner({ body }: { body: Body }) {
   const rings = body.rings;
 
   return (
-    <group position={pos}>
+    <group position={pos} onClick={onSelectBody ? (e) => { e.stopPropagation(); onSelectBody(body); } : undefined}>
       <mesh>
         <sphereGeometry args={[r, 48, 48]} />
         <meshStandardMaterial
@@ -194,17 +194,17 @@ function PlanetInner({ body }: { body: Body }) {
   );
 }
 
-function Planet({ body }: { body: Body }) {
+function Planet({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Body) => void }) {
   const r = Math.max(body.radius * PLANET_SCALE, MIN_RADIUS);
   const pos = body.position as [number, number, number];
   return (
     <Suspense fallback={
-      <mesh position={pos}>
+      <mesh position={pos} onClick={onSelectBody ? (e) => { e.stopPropagation(); onSelectBody(body); } : undefined}>
         <sphereGeometry args={[r, 48, 48]} />
         <meshStandardMaterial color={body.color} roughness={0.85} metalness={0} />
       </mesh>
     }>
-      <PlanetInner body={body} />
+      <PlanetInner body={body} onSelectBody={onSelectBody} />
     </Suspense>
   );
 }
@@ -291,7 +291,17 @@ function AutoFit({ controlsRef }: { controlsRef: React.RefObject<{ target: THREE
 }
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
-function SceneContent({ onFocusBody }: { onFocusBody: (name: string | null) => void }) {
+function SceneContent({
+  onFocusBody,
+  onSelectBody,
+  autoRotate,
+  onManualControl,
+}: {
+  onFocusBody: (name: string | null) => void;
+  onSelectBody: (body: Body) => void;
+  autoRotate: boolean;
+  onManualControl: () => void;
+}) {
   const bodies = useSimStore((s) => s.bodies);
   const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null);
   const sun = bodies.find((b) => b.id === "sun");
@@ -303,10 +313,10 @@ function SceneContent({ onFocusBody }: { onFocusBody: (name: string | null) => v
       <ambientLight intensity={0.02} />
       <StarField count={20000} />
 
-      {sun && <Sun body={sun} />}
+      {sun && <Sun body={sun} onSelectBody={onSelectBody} />}
       {planets.map((body) => (
         <group key={body.id}>
-          <Planet body={body} />
+          <Planet body={body} onSelectBody={onSelectBody} />
           <OrbitRing body={body} />
         </group>
       ))}
@@ -317,11 +327,122 @@ function SceneContent({ onFocusBody }: { onFocusBody: (name: string | null) => v
         dampingFactor={0.05}
         minDistance={5}
         maxDistance={8000}
+        autoRotate={autoRotate}
+        autoRotateSpeed={0.5}
       />
       <CameraController controlsRef={controlsRef} />
       <AutoFit controlsRef={controlsRef} />
-      <KeyboardControls controlsRef={controlsRef} onFocusBody={onFocusBody} />
+      <KeyboardControls
+        controlsRef={controlsRef}
+        onFocusBody={onFocusBody}
+        onManualControl={onManualControl}
+      />
     </>
+  );
+}
+
+// ── Keyboard shortcuts panel ──────────────────────────────────────────────────
+const SHORTCUTS = [
+  { keys: "W A S D", action: "Free-fly camera" },
+  { keys: "Q / E", action: "Move up / down" },
+  { keys: "Tab", action: "Next planet" },
+  { keys: "Shift+Tab", action: "Previous planet" },
+  { keys: "1 – 9", action: "Jump to planet" },
+  { keys: "Click", action: "Focus & auto-rotate" },
+  { keys: "?", action: "Toggle this panel" },
+];
+
+function KeyBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        background: "rgba(255,255,255,0.1)",
+        border: "1px solid rgba(255,255,255,0.25)",
+        borderRadius: 4,
+        padding: "1px 5px",
+        fontFamily: "monospace",
+        fontSize: 11,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ShortcutsPanel({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    const handleClick = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    // Delay so the toggle button click doesn't immediately close
+    const id = setTimeout(() => document.addEventListener("mousedown", handleClick), 0);
+    return () => {
+      clearTimeout(id);
+      document.removeEventListener("mousedown", handleClick);
+    };
+  }, [visible, onClose]);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      ref={panelRef}
+      style={{
+        position: "fixed",
+        bottom: 70,
+        right: 24,
+        background: "rgba(0,0,0,0.75)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        border: "1px solid rgba(255,255,255,0.15)",
+        borderRadius: 10,
+        padding: 16,
+        minWidth: 260,
+        zIndex: 100,
+        color: "#fff",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10,
+          textTransform: "uppercase",
+          letterSpacing: "0.12em",
+          color: "#aaa",
+          marginBottom: 12,
+          fontFamily: "sans-serif",
+        }}
+      >
+        Controls
+      </div>
+      <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <tbody>
+          {SHORTCUTS.map(({ keys, action }) => (
+            <tr key={keys}>
+              <td style={{ paddingBottom: 8, paddingRight: 14, verticalAlign: "middle" }}>
+                <KeyBadge>{keys}</KeyBadge>
+              </td>
+              <td
+                style={{
+                  paddingBottom: 8,
+                  fontFamily: "sans-serif",
+                  fontSize: 12,
+                  color: "#ddd",
+                  verticalAlign: "middle",
+                }}
+              >
+                {action}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -330,6 +451,9 @@ export default function App() {
   const { playback, simTime, bodies } = useSimStore();
   const [focusedBody, setFocusedBody] = useState<string | null>(null);
   const [hudVisible, setHudVisible] = useState(false);
+  const [autoRotate, setAutoRotate] = useState(false);
+  const [shortcutsVisible, setShortcutsVisible] = useState(false);
+  const [helpHovered, setHelpHovered] = useState(false);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleFocusBody = useCallback((name: string | null) => {
@@ -341,6 +465,32 @@ export default function App() {
         setHudVisible(false);
       }, 2000);
     }
+  }, []);
+
+  const handleManualControl = useCallback(() => {
+    setAutoRotate(false);
+  }, []);
+
+  const handleSelectBody = useCallback((body: Body) => {
+    // Trigger focus animation via the module-level ref set by KeyboardControls
+    const focusFn = (window as unknown as Record<string, unknown>).__focusBodyById as ((id: string) => void) | undefined;
+    if (focusFn) focusFn(body.id);
+    setAutoRotate(true);
+  }, []);
+
+  // Toggle shortcuts panel on "?" keypress
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      ) return;
+      if (e.key === "?") {
+        setShortcutsVisible((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   }, []);
 
   useEffect(() => {
@@ -357,7 +507,12 @@ export default function App() {
   return (
     <div style={{ height: "100vh", width: "100vw" }}>
       <Canvas camera={{ position: [0, 300, 500], fov: 45 }}>
-        <SceneContent onFocusBody={handleFocusBody} />
+        <SceneContent
+          onFocusBody={handleFocusBody}
+          onSelectBody={handleSelectBody}
+          autoRotate={autoRotate}
+          onManualControl={handleManualControl}
+        />
       </Canvas>
 
       {/* Status HUD — top left */}
@@ -398,6 +553,45 @@ export default function App() {
       >
         {focusedBody ?? ""}
       </div>
+
+      {/* Shortcuts panel (rendered above button) */}
+      <ShortcutsPanel
+        visible={shortcutsVisible}
+        onClose={() => setShortcutsVisible(false)}
+      />
+
+      {/* ? help button — bottom right */}
+      <button
+        onClick={() => setShortcutsVisible((v) => !v)}
+        onMouseEnter={() => setHelpHovered(true)}
+        onMouseLeave={() => setHelpHovered(false)}
+        style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          width: 36,
+          height: 36,
+          borderRadius: "50%",
+          background: helpHovered ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.12)",
+          border: "1px solid rgba(255,255,255,0.25)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          color: "#ffffff",
+          fontSize: 16,
+          fontFamily: "monospace",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 101,
+          transition: "background 0.15s ease",
+          padding: 0,
+          lineHeight: 1,
+        }}
+        aria-label="Toggle keyboard shortcuts"
+      >
+        ?
+      </button>
     </div>
   );
 }

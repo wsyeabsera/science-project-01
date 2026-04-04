@@ -20,9 +20,11 @@ const BODY_ORDER = [
 export function KeyboardControls({
   controlsRef,
   onFocusBody,
+  onManualControl,
 }: {
   controlsRef: React.RefObject<{ target: THREE.Vector3; update: () => void } | null>;
   onFocusBody: (name: string | null) => void;
+  onManualControl?: () => void;
 }) {
   const { camera } = useThree();
   const bodies = useSimStore((s) => s.bodies);
@@ -39,9 +41,12 @@ export function KeyboardControls({
   const bodiesRef = useRef(bodies);
   useEffect(() => { bodiesRef.current = bodies; }, [bodies]);
 
-  // Callback ref to avoid stale closure
+  // Callback refs to avoid stale closures
   const onFocusBodyRef = useRef(onFocusBody);
   useEffect(() => { onFocusBodyRef.current = onFocusBody; }, [onFocusBody]);
+
+  const onManualControlRef = useRef(onManualControl);
+  useEffect(() => { onManualControlRef.current = onManualControl; }, [onManualControl]);
 
   // Helper: focus a body by index in BODY_ORDER
   const focusBodyAtIndex = (idx: number) => {
@@ -75,6 +80,39 @@ export function KeyboardControls({
     onFocusBodyRef.current(body.id.charAt(0).toUpperCase() + body.id.slice(1));
   };
 
+  // Helper: focus a body by id — used by click handler
+  const focusBodyById = (bodyId: string) => {
+    const allBodies = bodiesRef.current;
+    const availableIds = BODY_ORDER.filter((id) => allBodies.some((b) => b.id === id));
+    const idx = availableIds.indexOf(bodyId);
+    if (idx !== -1) {
+      focusBodyAtIndex(idx);
+    } else {
+      // Body not in BODY_ORDER list, focus it directly
+      const body = allBodies.find((b) => b.id === bodyId);
+      if (!body || !controlsRef.current) return;
+      const pos = new THREE.Vector3(...(body.position as [number, number, number]));
+      const orbitDist = body.id === "sun"
+        ? 150
+        : Math.max(body.radius * PLANET_SCALE * 4, 30);
+      const camOffset = new THREE.Vector3(orbitDist * 0.6, orbitDist * 0.4, orbitDist * 0.8).normalize().multiplyScalar(orbitDist);
+      targetLookAtRef.current = pos.clone();
+      targetPositionRef.current = pos.clone().add(camOffset);
+      onFocusBodyRef.current(body.id.charAt(0).toUpperCase() + body.id.slice(1));
+    }
+  };
+
+  // Expose focusBodyById via a ref stored on the component instance
+  // We attach it to the controlsRef's parent via a separate exported ref pattern —
+  // instead, we expose it through a module-level ref that SceneContent can access.
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__focusBodyById = focusBodyById;
+    return () => {
+      delete (window as unknown as Record<string, unknown>).__focusBodyById;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore when typing in an input field
@@ -88,6 +126,7 @@ export function KeyboardControls({
       // Tab cycling
       if (e.key === "Tab") {
         e.preventDefault();
+        onManualControlRef.current?.();
         const allBodies = bodiesRef.current;
         const availableIds = BODY_ORDER.filter((id) => allBodies.some((b) => b.id === id));
         if (availableIds.length === 0) return;
@@ -102,8 +141,14 @@ export function KeyboardControls({
       // Number keys 1–9 for direct jump
       if (/^[1-9]$/.test(e.key)) {
         e.preventDefault();
+        onManualControlRef.current?.();
         focusBodyAtIndex(parseInt(e.key, 10) - 1);
         return;
+      }
+
+      // WASD/QE keys — signal manual control to disable auto-rotate
+      if (["w", "a", "s", "d", "q", "e"].includes(key)) {
+        onManualControlRef.current?.();
       }
 
       keysRef.current[key] = true;
