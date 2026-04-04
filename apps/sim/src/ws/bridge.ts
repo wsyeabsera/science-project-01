@@ -31,11 +31,18 @@ export function connectBridge(wsUrl = "ws://localhost:8080"): () => void {
       case "set_body":
         store.setBody(msg.payload);
         break;
-      case "control_sim":
-        store.setPlayback(msg.payload.action === "reset" ? "stopped" : msg.payload.action as "playing" | "paused" | "stopped");
+      case "control_sim": {
+        const playbackMap: Record<string, "playing" | "paused" | "stopped"> = {
+          play: "playing",
+          pause: "paused",
+          stop: "stopped",
+          reset: "stopped",
+        };
+        store.setPlayback(playbackMap[msg.payload.action] ?? "stopped");
         if (msg.payload.timeScale !== undefined) store.setTimeScale(msg.payload.timeScale);
         if (msg.payload.action === "reset") store.reset();
         break;
+      }
       case "set_camera":
         store.setCamera(msg.payload);
         break;
