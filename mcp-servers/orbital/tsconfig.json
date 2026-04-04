@@ -8,8 +8,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "ES2022",
-    "allowImportingTsExtensions": false,
-    "jsx": "preserve"
+    "allowImportingTsExtensions": false
   },
   "include": ["src"]
 }
