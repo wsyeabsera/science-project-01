@@ -1,15 +1,18 @@
 import { useEffect, useRef, useMemo, Suspense, useState, useCallback } from "react";
 import * as THREE from "three";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, useTexture } from "@react-three/drei";
 import { StarField } from "@astrophysics-playground/ui/three";
 import { connectBridge } from "./ws/bridge";
 import { useSimStore, type Body } from "./store";
-import { KeyboardControls } from "./KeyboardControls";
+import { KeyboardControls, jkRef, selectedBodyIdRef } from "./KeyboardControls";
 
 // Visual radius multiplier so planets are large enough to see
 const PLANET_SCALE = 8;
 const MIN_RADIUS = 1.5;
+
+// 1 simulated day = this many real seconds (governs planet spin + moon orbit speed)
+const SIM_DAYS_PER_REAL_SECOND = 1 / 8;
 
 const TEXTURE_PATHS: Record<string, string> = {
   sun: "/textures/sun.jpg",
@@ -23,9 +26,59 @@ const TEXTURE_PATHS: Record<string, string> = {
   "saturn-rings-alpha": "/textures/saturn-ring-alpha.gif",
   uranus: "/textures/uranus.jpg",
   neptune: "/textures/neptune.jpg",
+  pluto: "/textures/moons/pluto.jpg",
   "earth-clouds": "/textures/earth-clouds.jpg",
   "earth-clouds-alpha": "/textures/earth-clouds-alpha.jpg",
   "earth-specular": "/textures/earth-specular.jpg",
+  "moon": "/textures/moons/moon.jpg",
+  "io": "/textures/moons/io.jpg",
+  "europa": "/textures/moons/europa.jpg",
+  "ganymede": "/textures/moons/ganymede.jpg",
+  "callisto": "/textures/moons/callisto.jpg",
+  "titan": "/textures/moons/titan.jpg",
+};
+
+// Sidereal rotation period in days (negative = retrograde)
+// Source: NASA NSSDCA Planetary Fact Sheet
+const ROTATION_PERIOD_DAYS: Record<string, number> = {
+  mercury:  1407.6  / 24,
+  venus:   -5832.5  / 24,   // retrograde
+  earth:      23.9345 / 24,
+  mars:       24.6229 / 24,
+  jupiter:     9.9250 / 24,
+  saturn:     10.656  / 24,
+  uranus:    -17.24   / 24,  // retrograde (axial tilt > 90°)
+  neptune:    16.11   / 24,
+};
+
+// Moon system definitions
+// orbitRadius in Three.js units, orbitSpeed in rad/real-second via SIM_DAYS_PER_REAL_SECOND
+// radiusUnits = moon_radius_km * 0.5/6371 * PLANET_SCALE (pre-computed, floored at 1.5)
+interface MoonDef {
+  id: string;
+  name: string;
+  orbitRadius: number;    // Three.js units from parent center
+  periodDays: number;     // real orbital period for speed calculation
+  radiusUnits: number;    // display radius in Three.js units
+  textureKey: string;
+  color: string;
+}
+
+// 1 AU = 100 units. Orbit radii chosen to look proportionally accurate
+// while fitting within each planet's visual neighbourhood.
+const MOON_SYSTEMS: Record<string, MoonDef[]> = {
+  earth: [
+    { id: "moon",     name: "Moon",     orbitRadius: 22,  periodDays: 27.32,  radiusUnits: 2.2,  textureKey: "moon",     color: "#9b9b9b" },
+  ],
+  jupiter: [
+    { id: "io",       name: "Io",       orbitRadius: 62,  periodDays: 1.769,  radiusUnits: 2.3,  textureKey: "io",       color: "#e8c84a" },
+    { id: "europa",   name: "Europa",   orbitRadius: 88,  periodDays: 3.551,  radiusUnits: 2.0,  textureKey: "europa",   color: "#d4c4a0" },
+    { id: "ganymede", name: "Ganymede", orbitRadius: 125, periodDays: 7.155,  radiusUnits: 3.3,  textureKey: "ganymede", color: "#8c8070" },
+    { id: "callisto", name: "Callisto", orbitRadius: 175, periodDays: 16.689, radiusUnits: 3.0,  textureKey: "callisto", color: "#5a5040" },
+  ],
+  saturn: [
+    { id: "titan",    name: "Titan",    orbitRadius: 115, periodDays: 15.945, radiusUnits: 3.2,  textureKey: "titan",    color: "#c88b3a" },
+  ],
 };
 
 // ── Saturn rings ──────────────────────────────────────────────────────────────
@@ -82,29 +135,7 @@ function SunInner({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Bo
           emissiveIntensity={1.5}
         />
       </mesh>
-      {/* Inner glow */}
-      <mesh>
-        <sphereGeometry args={[body.radius * 1.2, 32, 32]} />
-        <meshStandardMaterial
-          color={body.color}
-          emissive={new THREE.Color(body.color)}
-          emissiveIntensity={1}
-          transparent opacity={0.3}
-          side={THREE.BackSide} depthWrite={false}
-        />
-      </mesh>
-      {/* Outer glow */}
-      <mesh>
-        <sphereGeometry args={[body.radius * 1.6, 32, 32]} />
-        <meshStandardMaterial
-          color={body.color}
-          emissive={new THREE.Color(body.color)}
-          emissiveIntensity={0.4}
-          transparent opacity={0.1}
-          side={THREE.BackSide} depthWrite={false}
-        />
-      </mesh>
-      <pointLight color="#ffffff" intensity={60} decay={1} />
+      <pointLight color="#ffffff" intensity={150} decay={1} />
     </group>
   );
 }
@@ -118,7 +149,7 @@ function Sun({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Body) =
           <sphereGeometry args={[body.radius, 48, 48]} />
           <meshStandardMaterial color={body.color} emissive={new THREE.Color(body.color)} emissiveIntensity={3} />
         </mesh>
-        <pointLight color="#ffffff" intensity={60} decay={1} />
+        <pointLight color="#ffffff" intensity={150} decay={1} />
       </group>
     }>
       <SunInner body={body} onSelectBody={onSelectBody} />
@@ -155,6 +186,26 @@ function PlanetInner({ body, onSelectBody }: { body: Body; onSelectBody?: (body:
   const r = Math.max(body.radius * PLANET_SCALE, MIN_RADIUS);
   const pos = body.position as [number, number, number];
   const isEarth = body.id === "earth";
+  const meshRef = useRef<THREE.Mesh>(null);
+
+  // Continuous self-rotation based on real sidereal period
+  // J/K overrides when this planet is selected
+  useFrame((_state, delta) => {
+    if (!meshRef.current) return;
+    const isSelected = body.id === selectedBodyIdRef.current;
+    if (isSelected && (jkRef.j || jkRef.k)) {
+      if (jkRef.j) meshRef.current.rotation.y += delta * 1.5;
+      if (jkRef.k) meshRef.current.rotation.y -= delta * 1.5;
+    } else {
+      const periodDays = ROTATION_PERIOD_DAYS[body.id];
+      if (periodDays !== undefined) {
+        // Use minimum visual period of 5 days so slow rotators (Mercury, Venus) are still visible
+        const visualPeriod = Math.sign(periodDays) * Math.min(Math.abs(periodDays), 5);
+        const angularSpeed = (2 * Math.PI / visualPeriod) * SIM_DAYS_PER_REAL_SECOND;
+        meshRef.current.rotation.y += angularSpeed * delta;
+      }
+    }
+  });
 
   const texPaths = isEarth
     ? [TEXTURE_PATHS.earth, TEXTURE_PATHS["earth-specular"]]
@@ -170,7 +221,7 @@ function PlanetInner({ body, onSelectBody }: { body: Body; onSelectBody?: (body:
 
   return (
     <group position={pos} onClick={onSelectBody ? (e) => { e.stopPropagation(); onSelectBody(body); } : undefined}>
-      <mesh>
+      <mesh ref={meshRef}>
         <sphereGeometry args={[r, 48, 48]} />
         <meshStandardMaterial
           map={texture}
@@ -209,6 +260,126 @@ function Planet({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Body
   );
 }
 
+// ── Moon orbit ring ───────────────────────────────────────────────────────────
+function MoonOrbitRing({ radius }: { radius: number }) {
+  const positions = useMemo(() => {
+    const pts = new Float32Array(129 * 3);
+    for (let i = 0; i <= 128; i++) {
+      const θ = (i / 128) * Math.PI * 2;
+      pts[i * 3]     = Math.cos(θ) * radius;
+      pts[i * 3 + 1] = 0;
+      pts[i * 3 + 2] = Math.sin(θ) * radius;
+    }
+    return pts;
+  }, [radius]);
+
+  return (
+    <lineLoop>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <lineBasicMaterial color="#ffffff" transparent opacity={0.08} />
+    </lineLoop>
+  );
+}
+
+// ── Single moon ───────────────────────────────────────────────────────────────
+function MoonBodyInner({ moon, startAngle }: { moon: MoonDef; startAngle: number }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const angleRef = useRef(startAngle);
+  const texture = useTexture(TEXTURE_PATHS[moon.textureKey] ?? TEXTURE_PATHS.mercury);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const orbitSpeed = (2 * Math.PI / moon.periodDays) * SIM_DAYS_PER_REAL_SECOND;
+
+  useFrame((_state, delta) => {
+    angleRef.current += orbitSpeed * delta;
+    if (!groupRef.current) return;
+    groupRef.current.position.set(
+      Math.cos(angleRef.current) * moon.orbitRadius,
+      0,
+      Math.sin(angleRef.current) * moon.orbitRadius
+    );
+  });
+
+  return (
+    <group ref={groupRef}>
+      <mesh>
+        <sphereGeometry args={[moon.radiusUnits, 24, 24]} />
+        <meshStandardMaterial map={texture} roughness={0.9} metalness={0} />
+      </mesh>
+    </group>
+  );
+}
+
+function MoonBody({ moon, startAngle }: { moon: MoonDef; startAngle: number }) {
+  return (
+    <Suspense fallback={null}>
+      <MoonBodyInner moon={moon} startAngle={startAngle} />
+    </Suspense>
+  );
+}
+
+// ── Moon system (all moons for one planet) ────────────────────────────────────
+function MoonSystem({ body }: { body: Body }) {
+  const moons = MOON_SYSTEMS[body.id];
+  if (!moons) return null;
+  const pos = body.position as [number, number, number];
+
+  // Stable random start angles per moon (seeded by index)
+  const startAngles = useMemo(
+    () => moons.map((_, i) => (i * 2.399) % (2 * Math.PI)), // golden-angle spacing
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [body.id]
+  );
+
+  return (
+    <group position={pos}>
+      {moons.map((moon, i) => (
+        <group key={moon.id}>
+          <MoonOrbitRing radius={moon.orbitRadius} />
+          <MoonBody moon={moon} startAngle={startAngles[i]} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// ── Asteroid Belt ─────────────────────────────────────────────────────────────
+function AsteroidBelt() {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const COUNT = 3000;
+
+  useEffect(() => {
+    if (!meshRef.current) return;
+    const dummy = new THREE.Object3D();
+    const INNER = 206, OUTER = 328;
+
+    for (let i = 0; i < COUNT; i++) {
+      // Square-root bias: more asteroids in inner belt
+      const r = INNER + Math.sqrt(Math.random()) * (OUTER - INNER);
+      const theta = Math.random() * Math.PI * 2;
+      const y = (Math.random() - 0.5) * 10; // ±5 units vertical spread
+
+      dummy.position.set(Math.cos(theta) * r, y, Math.sin(theta) * r);
+      // Random scale variation: 0.3 to 1.0
+      const s = 0.3 + Math.random() * 0.7;
+      dummy.scale.setScalar(s);
+      dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  }, []);
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, COUNT]}>
+      <sphereGeometry args={[0.35, 4, 4]} />
+      <meshStandardMaterial color="#9a8870" roughness={0.9} metalness={0.1} />
+    </instancedMesh>
+  );
+}
+
 // ── Orbit ring ────────────────────────────────────────────────────────────────
 function OrbitRing({ body }: { body: Body }) {
   const [bx, , bz] = body.position;
@@ -237,12 +408,19 @@ function OrbitRing({ body }: { body: Body }) {
 }
 
 // ── Camera controller ─────────────────────────────────────────────────────────
+// Only fires on explicit MCP set_camera calls (storeCamera reference changes).
+// Tracks a storeCamera ref to skip the initial render without a camera value.
 function CameraController({ controlsRef }: { controlsRef: React.RefObject<{ target: THREE.Vector3; update: () => void } | null> }) {
   const { camera } = useThree();
   const storeCamera = useSimStore((s) => s.camera);
   const bodies = useSimStore((s) => s.bodies);
+  const prevStoreCameraRef = useRef(storeCamera);
 
   useEffect(() => {
+    // Only apply if storeCamera actually changed (new MCP command), not on every render
+    if (storeCamera === prevStoreCameraRef.current) return;
+    prevStoreCameraRef.current = storeCamera;
+
     if (!storeCamera || !controlsRef.current) return;
     const target = bodies.find((b) => b.id === storeCamera.target);
     if (!target) return;
@@ -294,12 +472,10 @@ function AutoFit({ controlsRef }: { controlsRef: React.RefObject<{ target: THREE
 function SceneContent({
   onFocusBody,
   onSelectBody,
-  autoRotate,
   onManualControl,
 }: {
   onFocusBody: (name: string | null) => void;
   onSelectBody: (body: Body) => void;
-  autoRotate: boolean;
   onManualControl: () => void;
 }) {
   const bodies = useSimStore((s) => s.bodies);
@@ -310,7 +486,7 @@ function SceneContent({
   return (
     <>
       <color attach="background" args={["#000005"]} />
-      <ambientLight intensity={0.02} />
+      <ambientLight intensity={0.06} />
       <StarField count={20000} />
 
       {sun && <Sun body={sun} onSelectBody={onSelectBody} />}
@@ -318,8 +494,10 @@ function SceneContent({
         <group key={body.id}>
           <Planet body={body} onSelectBody={onSelectBody} />
           <OrbitRing body={body} />
+          <MoonSystem body={body} />
         </group>
       ))}
+      <AsteroidBelt />
 
       <OrbitControls
         ref={controlsRef as React.RefObject<never>}
@@ -327,8 +505,6 @@ function SceneContent({
         dampingFactor={0.05}
         minDistance={5}
         maxDistance={8000}
-        autoRotate={autoRotate}
-        autoRotateSpeed={0.5}
       />
       <CameraController controlsRef={controlsRef} />
       <AutoFit controlsRef={controlsRef} />
@@ -345,10 +521,11 @@ function SceneContent({
 const SHORTCUTS = [
   { keys: "W A S D", action: "Free-fly camera" },
   { keys: "Q / E", action: "Move up / down" },
+  { keys: "J / K", action: "Spin planet left / right" },
   { keys: "Tab", action: "Next planet" },
   { keys: "Shift+Tab", action: "Previous planet" },
   { keys: "1 – 9", action: "Jump to planet" },
-  { keys: "Click", action: "Focus & auto-rotate" },
+  { keys: "Click", action: "Focus planet" },
   { keys: "?", action: "Toggle this panel" },
 ];
 
@@ -451,7 +628,6 @@ export default function App() {
   const { playback, simTime, bodies } = useSimStore();
   const [focusedBody, setFocusedBody] = useState<string | null>(null);
   const [hudVisible, setHudVisible] = useState(false);
-  const [autoRotate, setAutoRotate] = useState(false);
   const [shortcutsVisible, setShortcutsVisible] = useState(false);
   const [helpHovered, setHelpHovered] = useState(false);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -468,14 +644,13 @@ export default function App() {
   }, []);
 
   const handleManualControl = useCallback(() => {
-    setAutoRotate(false);
+    // no-op placeholder — kept for future use
   }, []);
 
   const handleSelectBody = useCallback((body: Body) => {
     // Trigger focus animation via the module-level ref set by KeyboardControls
     const focusFn = (window as unknown as Record<string, unknown>).__focusBodyById as ((id: string) => void) | undefined;
     if (focusFn) focusFn(body.id);
-    setAutoRotate(true);
   }, []);
 
   // Toggle shortcuts panel on "?" keypress
@@ -510,7 +685,6 @@ export default function App() {
         <SceneContent
           onFocusBody={handleFocusBody}
           onSelectBody={handleSelectBody}
-          autoRotate={autoRotate}
           onManualControl={handleManualControl}
         />
       </Canvas>

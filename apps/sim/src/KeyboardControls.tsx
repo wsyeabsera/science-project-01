@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
+import { useHotkeys, type UseHotkeyDefinition, type RawHotkey } from "@tanstack/react-hotkeys";
 import { useSimStore } from "./store";
 
 const PLANET_SCALE = 8;
@@ -16,6 +17,10 @@ const BODY_ORDER = [
   "uranus",
   "neptune",
 ];
+
+// Module-level refs — readable in useFrame without React re-renders
+export const jkRef = { j: false, k: false };
+export const selectedBodyIdRef = { current: null as string | null };
 
 export function KeyboardControls({
   controlsRef,
@@ -53,7 +58,6 @@ export function KeyboardControls({
     const allBodies = bodiesRef.current;
     if (allBodies.length === 0) return;
 
-    // Clamp/wrap index within available bodies in BODY_ORDER that exist in store
     const availableIds = BODY_ORDER.filter((id) => allBodies.some((b) => b.id === id));
     if (availableIds.length === 0) return;
 
@@ -65,18 +69,18 @@ export function KeyboardControls({
     if (!body || !controlsRef.current) return;
 
     const pos = new THREE.Vector3(...(body.position as [number, number, number]));
-
     const orbitDist =
       body.id === "sun"
         ? 150
         : Math.max(body.radius * PLANET_SCALE * 4, 30);
-
-    // Position camera offset slightly above and in front
-    const camOffset = new THREE.Vector3(orbitDist * 0.6, orbitDist * 0.4, orbitDist * 0.8).normalize().multiplyScalar(orbitDist);
+    const camOffset = new THREE.Vector3(orbitDist * 0.6, orbitDist * 0.4, orbitDist * 0.8)
+      .normalize()
+      .multiplyScalar(orbitDist);
 
     targetLookAtRef.current = pos.clone();
     targetPositionRef.current = pos.clone().add(camOffset);
 
+    selectedBodyIdRef.current = bodyId;
     onFocusBodyRef.current(body.id.charAt(0).toUpperCase() + body.id.slice(1));
   };
 
@@ -88,23 +92,22 @@ export function KeyboardControls({
     if (idx !== -1) {
       focusBodyAtIndex(idx);
     } else {
-      // Body not in BODY_ORDER list, focus it directly
       const body = allBodies.find((b) => b.id === bodyId);
       if (!body || !controlsRef.current) return;
       const pos = new THREE.Vector3(...(body.position as [number, number, number]));
       const orbitDist = body.id === "sun"
         ? 150
         : Math.max(body.radius * PLANET_SCALE * 4, 30);
-      const camOffset = new THREE.Vector3(orbitDist * 0.6, orbitDist * 0.4, orbitDist * 0.8).normalize().multiplyScalar(orbitDist);
+      const camOffset = new THREE.Vector3(orbitDist * 0.6, orbitDist * 0.4, orbitDist * 0.8)
+        .normalize()
+        .multiplyScalar(orbitDist);
       targetLookAtRef.current = pos.clone();
       targetPositionRef.current = pos.clone().add(camOffset);
+      selectedBodyIdRef.current = bodyId;
       onFocusBodyRef.current(body.id.charAt(0).toUpperCase() + body.id.slice(1));
     }
   };
 
-  // Expose focusBodyById via a ref stored on the component instance
-  // We attach it to the controlsRef's parent via a separate exported ref pattern —
-  // instead, we expose it through a module-level ref that SceneContent can access.
   useEffect(() => {
     (window as unknown as Record<string, unknown>).__focusBodyById = focusBodyById;
     return () => {
@@ -113,9 +116,47 @@ export function KeyboardControls({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Discrete hotkeys via TanStack ────────────────────────────────────────────
+  useHotkeys(
+    [
+      {
+        hotkey: "Tab",
+        callback: () => {
+          onManualControlRef.current?.();
+          const allBodies = bodiesRef.current;
+          const availableIds = BODY_ORDER.filter((id) => allBodies.some((b) => b.id === id));
+          if (availableIds.length === 0) return;
+          const next = (focusedIndexRef.current + 1) % availableIds.length;
+          focusBodyAtIndex(next);
+        },
+        options: { preventDefault: true },
+      },
+      {
+        hotkey: "Shift+Tab",
+        callback: () => {
+          onManualControlRef.current?.();
+          const allBodies = bodiesRef.current;
+          const availableIds = BODY_ORDER.filter((id) => allBodies.some((b) => b.id === id));
+          if (availableIds.length === 0) return;
+          const current = focusedIndexRef.current;
+          const prev = current <= 0 ? availableIds.length - 1 : current - 1;
+          focusBodyAtIndex(prev);
+        },
+        options: { preventDefault: true },
+      },
+      ...Array.from({ length: 9 }, (_, i): UseHotkeyDefinition => ({
+        hotkey: { key: String(i + 1) } as RawHotkey,
+        callback: () => {
+          onManualControlRef.current?.();
+          focusBodyAtIndex(i);
+        },
+      })),
+    ],
+  );
+
+  // ── Held keys for free-fly and J/K planet spin ────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore when typing in an input field
       if (
         document.activeElement?.tagName === "INPUT" ||
         document.activeElement?.tagName === "TEXTAREA"
@@ -123,39 +164,20 @@ export function KeyboardControls({
 
       const key = e.key.toLowerCase();
 
-      // Tab cycling
-      if (e.key === "Tab") {
-        e.preventDefault();
-        onManualControlRef.current?.();
-        const allBodies = bodiesRef.current;
-        const availableIds = BODY_ORDER.filter((id) => allBodies.some((b) => b.id === id));
-        if (availableIds.length === 0) return;
-        const current = focusedIndexRef.current;
-        const next = e.shiftKey
-          ? (current <= 0 ? availableIds.length - 1 : current - 1)
-          : (current + 1) % availableIds.length;
-        focusBodyAtIndex(next);
-        return;
-      }
-
-      // Number keys 1–9 for direct jump
-      if (/^[1-9]$/.test(e.key)) {
-        e.preventDefault();
-        onManualControlRef.current?.();
-        focusBodyAtIndex(parseInt(e.key, 10) - 1);
-        return;
-      }
-
-      // WASD/QE keys — signal manual control to disable auto-rotate
       if (["w", "a", "s", "d", "q", "e"].includes(key)) {
         onManualControlRef.current?.();
+        keysRef.current[key] = true;
       }
 
-      keysRef.current[key] = true;
+      if (key === "j") jkRef.j = true;
+      if (key === "k") jkRef.k = true;
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      keysRef.current[e.key.toLowerCase()] = false;
+      const key = e.key.toLowerCase();
+      keysRef.current[key] = false;
+      if (key === "j") jkRef.j = false;
+      if (key === "k") jkRef.k = false;
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -164,7 +186,6 @@ export function KeyboardControls({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useFrame((_state, delta) => {
@@ -178,7 +199,6 @@ export function KeyboardControls({
       controlsRef.current.target.lerp(targetLookAtRef.current, lerpFactor);
       controlsRef.current.update();
 
-      // Stop lerping when close enough
       if (
         camera.position.distanceTo(targetPositionRef.current) < 0.1 &&
         controlsRef.current.target.distanceTo(targetLookAtRef.current) < 0.1
@@ -197,18 +217,15 @@ export function KeyboardControls({
 
     if (!moving) return;
 
-    // Cancel any in-progress focus animation when user takes manual control
     targetPositionRef.current = null;
     targetLookAtRef.current = null;
 
     const dist = camera.position.distanceTo(controlsRef.current.target);
     const speed = dist * 0.8 * delta;
 
-    // Forward = camera look direction (full 3D)
     const forward = new THREE.Vector3();
     camera.getWorldDirection(forward);
 
-    // Right = camera right vector
     const right = new THREE.Vector3();
     right.crossVectors(forward, camera.up).normalize();
 
