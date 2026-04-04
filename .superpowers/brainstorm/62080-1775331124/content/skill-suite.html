@@ -1,0 +1,94 @@
+<h2>Layer 2: The Skill Suite</h2>
+<p class="subtitle">4 focused skills — each loads only when relevant, each has one clear job</p>
+
+<div style="display:flex;flex-direction:column;gap:16px;margin-top:8px">
+
+  <div style="background:#1a1222;border:1px solid #9333ea;border-radius:12px;padding:20px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <span style="font-size:24px">🏗️</span>
+      <div>
+        <div style="font-weight:700;color:#c084fc;font-size:15px">scene-builder</div>
+        <div style="font-size:11px;color:#aaa">Loads when: building or modifying any 3D environment</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:11px;color:#7c3aed;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Contains</div>
+        <ul style="margin:0;padding-left:16px;font-size:12px;color:#ccc;line-height:2">
+          <li>Proven Three.js patterns (PBR planet, atmosphere shader, star field, bloom)</li>
+          <li>Public texture sources (NASA, Solar System Scope URLs)</li>
+          <li>Cesium integration patterns (realistic Earth + Three.js overlay)</li>
+          <li>Lighting rigs for space (ambient + point sun, HDR env)</li>
+          <li>Camera control patterns (orbit controls, cinematic moves)</li>
+        </ul>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:11px;color:#7c3aed;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Aesthetic guide</div>
+        <ul style="margin:0;padding-left:16px;font-size:12px;color:#ccc;line-height:2">
+          <li>Dark deep-space background (#000005)</li>
+          <li>Physically correct planet scale ratios</li>
+          <li>Glowing sun with lens flare + corona</li>
+          <li>Orbit paths as faint ellipses, not solid lines</li>
+          <li>Educational labels: always present, never cluttered</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:#1a1222;border:1px solid #9333ea;border-radius:12px;padding:20px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <span style="font-size:24px">🔭</span>
+      <div>
+        <div style="font-weight:700;color:#c084fc;font-size:15px">visual-reviewer</div>
+        <div style="font-size:11px;color:#aaa">Loads when: any visual change is made — the autonomous review loop</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#ccc;line-height:2">
+      Defines the exact Chrome MCP loop: navigate → screenshot → score against criteria → fix → repeat.<br>
+      <strong style="color:#aaa">Evaluation checklist Claude runs on every screenshot:</strong>
+      does it look like space? are labels readable? are controls responsive?
+      is the sun the brightest thing? are planet sizes roughly proportional?
+      is there something interesting to interact with? Only ships when all pass.
+    </div>
+  </div>
+
+  <div style="background:#1a1222;border:1px solid #9333ea;border-radius:12px;padding:20px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <span style="font-size:24px">🪐</span>
+      <div>
+        <div style="font-weight:700;color:#c084fc;font-size:15px">orbital-mechanics</div>
+        <div style="font-size:11px;color:#aaa">Loads when: scripting planet positions, velocities, orbital params</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#ccc;line-height:2">
+      A physics reference skill. Contains real data for all 8 planets + major moons:
+      semi-major axis, eccentricity, inclination, mass, radius, orbital period, color/texture.
+      Includes Kepler's laws as formulas Claude can apply directly to compute positions.
+      So "put Mars at its correct position for April 2026" is a single instruction — Claude looks up the data, calculates, applies.
+    </div>
+  </div>
+
+  <div style="background:#1a1222;border:1px solid #9333ea;border-radius:12px;padding:20px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <span style="font-size:24px">🎛️</span>
+      <div>
+        <div style="font-weight:700;color:#c084fc;font-size:15px">scene-scripter</div>
+        <div style="font-size:11px;color:#aaa">Loads when: controlling the sim programmatically via MCP</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#ccc;line-height:2">
+      Documents every MCP tool with exact parameter shapes.
+      Teaches Claude to script precise scenarios: "show Jupiter at opposition with its 4 Galilean moons,
+      time-accelerated at 100x, with labels showing distance from Earth."
+      One instruction → Claude calls the right MCP tools in the right order, no hand-holding.
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:20px;padding:14px;background:#111;border-radius:8px;border-left:3px solid #16a34a;font-size:12px;color:#aaa;line-height:1.8">
+  <strong style="color:#16a34a">How skills load:</strong>
+  Each skill has a description field Claude reads at session start.
+  "Build a solar system scene" → Claude sees <em>scene-builder</em> matches → loads it.
+  It never loads all 4 at once. Small context cost, big capability gain.
+</div>

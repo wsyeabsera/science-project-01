@@ -1,0 +1,114 @@
+<h2>System Architecture</h2>
+<p class="subtitle">How all pieces connect — skills, CLAUDE.md, MCP tools, and the Chrome review loop</p>
+
+<div style="display:flex;flex-direction:column;gap:24px;margin-top:8px">
+
+  <!-- Row 1: You -->
+  <div style="display:flex;justify-content:center">
+    <div style="background:#1a1a2e;border:2px solid #7c3aed;border-radius:12px;padding:16px 32px;text-align:center;min-width:160px">
+      <div style="font-size:24px">🧑‍🚀</div>
+      <div style="font-weight:700;color:#fff;margin-top:4px">You</div>
+      <div style="font-size:11px;color:#aaa;margin-top:2px">Terminal · high-level intent</div>
+    </div>
+  </div>
+
+  <!-- Arrow down -->
+  <div style="display:flex;justify-content:center;color:#7c3aed;font-size:20px">↓</div>
+
+  <!-- Row 2: Claude + Skills + CLAUDE.md -->
+  <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
+    <div style="background:#1a1a2e;border:2px solid #2563eb;border-radius:12px;padding:16px 20px;min-width:140px;text-align:center">
+      <div style="font-size:20px">🤖</div>
+      <div style="font-weight:700;color:#fff;margin-top:4px">Claude</div>
+      <div style="font-size:11px;color:#aaa;margin-top:2px">Autonomous agent</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="background:#0f2d1a;border:1px solid #16a34a;border-radius:8px;padding:10px 16px;font-size:12px">
+        <span style="color:#16a34a;font-weight:700">CLAUDE.md</span>
+        <span style="color:#aaa;margin-left:8px">autonomy rules · project conventions</span>
+      </div>
+      <div style="background:#1a1222;border:1px solid #9333ea;border-radius:8px;padding:10px 16px;font-size:12px">
+        <span style="color:#c084fc;font-weight:700">skill: scene-builder</span>
+        <span style="color:#aaa;margin-left:8px">Three.js patterns · textures · aesthetics</span>
+      </div>
+      <div style="background:#1a1222;border:1px solid #9333ea;border-radius:8px;padding:10px 16px;font-size:12px">
+        <span style="color:#c084fc;font-weight:700">skill: visual-reviewer</span>
+        <span style="color:#aaa;margin-left:8px">Chrome loop · eval criteria · iterate</span>
+      </div>
+      <div style="background:#1a1222;border:1px solid #9333ea;border-radius:8px;padding:10px 16px;font-size:12px">
+        <span style="color:#c084fc;font-weight:700">skill: orbital-mechanics</span>
+        <span style="color:#aaa;margin-left:8px">real planet data · Kepler · physics</span>
+      </div>
+      <div style="background:#1a1222;border:1px solid #9333ea;border-radius:8px;padding:10px 16px;font-size:12px">
+        <span style="color:#c084fc;font-weight:700">skill: scene-scripter</span>
+        <span style="color:#aaa;margin-left:8px">MCP tools · precise param control</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Arrows to tools -->
+  <div style="display:flex;justify-content:center;gap:80px;color:#555;font-size:14px">
+    <span>↙ edits code</span>
+    <span>↓ calls MCP</span>
+    <span>↘ drives browser</span>
+  </div>
+
+  <!-- Row 4: The three control surfaces -->
+  <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
+
+    <div style="background:#1a1a2e;border:2px solid #0891b2;border-radius:12px;padding:16px;min-width:180px;text-align:center">
+      <div style="font-size:20px">📁</div>
+      <div style="font-weight:700;color:#fff;margin-top:4px">Codebase</div>
+      <div style="font-size:11px;color:#aaa;margin-top:4px;text-align:left;line-height:1.6">
+        packages/ui components<br>
+        apps/sim scenes<br>
+        apps/studio layouts
+      </div>
+    </div>
+
+    <div style="background:#1a1a2e;border:2px solid #d97706;border-radius:12px;padding:16px;min-width:180px;text-align:center">
+      <div style="font-size:20px">🛰️</div>
+      <div style="font-weight:700;color:#fff;margin-top:4px">orbital MCP server</div>
+      <div style="font-size:11px;color:#aaa;margin-top:4px;text-align:left;line-height:1.6">
+        list_components<br>
+        list_scenes · load_scene<br>
+        set_body · control_sim<br>
+        get_sim_state
+      </div>
+    </div>
+
+    <div style="background:#1a1a2e;border:2px solid #dc2626;border-radius:12px;padding:16px;min-width:180px;text-align:center">
+      <div style="font-size:20px">🔭</div>
+      <div style="font-weight:700;color:#fff;margin-top:4px">Chrome MCP</div>
+      <div style="font-size:11px;color:#aaa;margin-top:4px;text-align:left;line-height:1.6">
+        navigate to localhost:5174<br>
+        take_screenshot<br>
+        evaluate visually<br>
+        iterate until good
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Arrow down -->
+  <div style="display:flex;justify-content:center;color:#555;font-size:20px">↓</div>
+
+  <!-- Row 5: The sim -->
+  <div style="display:flex;justify-content:center">
+    <div style="background:#0a0a1a;border:2px solid #1e40af;border-radius:12px;padding:16px 40px;text-align:center">
+      <div style="font-size:24px">🌍</div>
+      <div style="font-weight:700;color:#fff;margin-top:4px">Live Simulation</div>
+      <div style="font-size:11px;color:#aaa;margin-top:2px">localhost:5174 · Three.js + Cesium · real-time</div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;padding:16px;background:#111;border-radius:8px;border-left:3px solid #7c3aed">
+  <div style="font-size:12px;color:#aaa;line-height:1.8">
+    <strong style="color:#c084fc">The autonomous loop:</strong>
+    You give intent → Claude reads CLAUDE.md (knows it can act without asking) → loads the relevant skill →
+    writes code → calls orbital MCP to configure scene → navigates Chrome → screenshots → evaluates →
+    iterates → only interrupts you for real design decisions.
+  </div>
+</div>
