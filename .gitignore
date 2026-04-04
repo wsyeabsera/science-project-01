@@ -5,3 +5,5 @@ dist/
 .env.local
 *.local
 packages/ui/tsconfig.tsbuildinfo
+
+# logs/ is intentionally tracked — skill feedback feeds self-improvement
