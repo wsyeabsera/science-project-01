@@ -4,7 +4,11 @@
       "Bash(ls:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(grep -E \"\\\\.\\(ts|json\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|json\\)$\")",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm type-check:*)",
+      "Bash(timeout 3 node dist/index.js)",
+      "Bash(echo \"exit:$?\")"
     ]
   },
   "enabledPlugins": {

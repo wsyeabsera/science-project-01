@@ -4,3 +4,4 @@ dist/
 .env
 .env.local
 *.local
+packages/ui/tsconfig.tsbuildinfo
