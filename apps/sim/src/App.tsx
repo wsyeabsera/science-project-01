@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
-import { StarField } from "@astrophysics-playground/ui";
+import { StarField } from "@astrophysics-playground/ui/three";
 import { connectBridge } from "./ws/bridge";
 import { useSimStore } from "./store";
 
