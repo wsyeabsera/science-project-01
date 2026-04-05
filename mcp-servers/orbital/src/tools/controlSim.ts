@@ -11,7 +11,7 @@ export const controlSimSchema = z.object({
 
 export function controlSim(input: z.infer<typeof controlSimSchema>): string {
   applyControl(input.action, input.timeScale);
-  broadcast({ type: "control_sim", payload: input });
+  broadcast("control_sim", input);
   const scale = input.timeScale ? ` at ${input.timeScale}x time scale` : "";
   return `Simulation ${input.action}${scale}.`;
 }

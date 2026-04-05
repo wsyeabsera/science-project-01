@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { startWsServer } from "./ws/server.js";
+import { startSocketServer } from "./ws/server.js";
 
 // Existing tools
 import { listComponentsName, listComponentsSchema, listComponents } from "./tools/listComponents.js";
@@ -50,7 +50,7 @@ server.tool(addLabelName, addLabelSchema.shape, (input) => ({
   content: [{ type: "text", text: addLabel(input) }],
 }));
 
-startWsServer();
+startSocketServer();
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

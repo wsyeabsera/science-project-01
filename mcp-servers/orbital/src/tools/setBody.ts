@@ -27,6 +27,6 @@ export function setBody(input: z.infer<typeof setBodySchema>): string {
     rings: input.rings ?? null,
   };
   applyBody(body);
-  broadcast({ type: "set_body", payload: body });
+  broadcast("set_body", body);
   return `Body "${input.name}" (id: ${input.id}) set at position [${input.position.join(", ")}].`;
 }

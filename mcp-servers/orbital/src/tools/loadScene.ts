@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { broadcast } from "../ws/server.js";
-import { applyScene } from "../state.js";
+import { applyScene, applyBody } from "../state.js";
+import { SCENE_BODIES } from "../scenes.js";
 
 export const loadSceneName = "load_scene";
 
@@ -10,6 +11,13 @@ export const loadSceneSchema = z.object({
 
 export function loadScene(input: z.infer<typeof loadSceneSchema>): string {
   applyScene(input.id);
-  broadcast({ type: "load_scene", payload: { id: input.id } });
-  return `Scene "${input.id}" loaded and broadcast to sim.`;
+  broadcast("load_scene", { id: input.id });
+
+  const bodies = SCENE_BODIES[input.id] ?? [];
+  for (const body of bodies) {
+    applyBody(body);
+    broadcast("set_body", body);
+  }
+
+  return `Scene "${input.id}" loaded — ${bodies.length} bodies broadcast to sim.`;
 }

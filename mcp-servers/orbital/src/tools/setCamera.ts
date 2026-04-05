@@ -20,6 +20,6 @@ export function setCamera(input: z.infer<typeof setCameraSchema>): string {
     elevation: input.elevation,
   };
   applyCamera(camera);
-  broadcast({ type: "set_camera", payload: camera });
+  broadcast("set_camera", camera);
   return `Camera aimed at "${input.target}" at distance ${input.distance}, elevation ${input.elevation}°.`;
 }

@@ -18,6 +18,6 @@ export function addLabel(input: z.infer<typeof addLabelSchema>): string {
     style: input.style,
   };
   applyLabel(label);
-  broadcast({ type: "add_label", payload: label });
+  broadcast("add_label", label);
   return `Label added to body "${input.bodyId}".`;
 }

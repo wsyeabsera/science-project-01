@@ -1,76 +1,70 @@
+import { io, type Socket } from "socket.io-client";
 import { useSimStore } from "../store/index.js";
-import type { WsMessage } from "../../../../mcp-servers/orbital/src/types.js";
+import type { Body, Label, CameraState } from "../../../../mcp-servers/orbital/src/types.js";
 
-// Re-export WsMessage so App.tsx can use it if needed
-export type { WsMessage };
+export type { Body, Label, CameraState };
 
-let socket: WebSocket | null = null;
+let socket: Socket | null = null;
 
-export function connectBridge(wsUrl = "ws://localhost:8080"): () => void {
-  socket = new WebSocket(wsUrl);
+export function connectBridge(serverUrl = "http://localhost:8080"): () => void {
+  socket = io(serverUrl, {
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionAttempts: Infinity,
+  });
 
-  socket.onopen = () => {
-    console.log("[bridge] connected to orbital MCP server");
-  };
+  socket.on("connect", () => {
+    console.log("[bridge] connected to orbital MCP server", socket?.id);
+  });
 
-  socket.onmessage = (event: MessageEvent<string>) => {
-    let msg: WsMessage;
-    try {
-      msg = JSON.parse(event.data) as WsMessage;
-    } catch {
-      console.warn("[bridge] unparseable message", event.data);
-      return;
-    }
+  socket.on("disconnect", (reason) => {
+    console.log("[bridge] disconnected:", reason);
+  });
 
-    const store = useSimStore.getState();
+  socket.on("connect_error", (err) => {
+    console.warn("[bridge] connection error:", err.message);
+  });
 
-    switch (msg.type) {
-      case "load_scene":
-        store.loadScene(msg.payload.id);
-        break;
-      case "set_body":
-        store.setBody(msg.payload);
-        break;
-      case "control_sim": {
-        const playbackMap: Record<string, "playing" | "paused" | "stopped"> = {
-          play: "playing",
-          pause: "paused",
-          stop: "stopped",
-          reset: "stopped",
-        };
-        store.setPlayback(playbackMap[msg.payload.action] ?? "stopped");
-        if (msg.payload.timeScale !== undefined) store.setTimeScale(msg.payload.timeScale);
-        if (msg.payload.action === "reset") store.reset();
-        break;
-      }
-      case "set_camera":
-        store.setCamera(msg.payload);
-        break;
-      case "add_label":
-        store.addLabel(msg.payload);
-        break;
-      default:
-        console.warn("[bridge] unknown message type:", (msg as { type: string }).type);
-    }
-  };
+  const store = () => useSimStore.getState();
 
-  socket.onerror = (e) => console.error("[bridge] error", e);
+  socket.on("load_scene", (payload: { id: string }) => {
+    store().loadScene(payload.id);
+  });
 
-  socket.onclose = () => {
-    console.log("[bridge] disconnected");
-    socket = null;
-  };
+  socket.on("set_body", (payload: Body) => {
+    store().setBody(payload);
+  });
+
+  socket.on("control_sim", (payload: { action: "play" | "pause" | "stop" | "reset"; timeScale?: number }) => {
+    const playbackMap: Record<string, "playing" | "paused" | "stopped"> = {
+      play: "playing",
+      pause: "paused",
+      stop: "stopped",
+      reset: "stopped",
+    };
+    store().setPlayback(playbackMap[payload.action] ?? "stopped");
+    if (payload.timeScale !== undefined) store().setTimeScale(payload.timeScale);
+    if (payload.action === "reset") store().reset();
+  });
+
+  socket.on("set_camera", (payload: CameraState) => {
+    store().setCamera(payload);
+  });
+
+  socket.on("add_label", (payload: Label) => {
+    store().addLabel(payload);
+  });
 
   return () => {
-    socket?.close();
+    socket?.disconnect();
     socket = null;
   };
 }
 
-export function sendBridgeMessage(msg: WsMessage): void {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    console.warn("[bridge] socket not open, dropping message:", msg.type);
+export function sendBridgeMessage(event: string, payload: unknown): void {
+  if (!socket?.connected) {
+    console.warn("[bridge] socket not connected, dropping:", event);
     return;
   }
-  socket.send(JSON.stringify(msg));
+  socket.emit(event, payload);
 }

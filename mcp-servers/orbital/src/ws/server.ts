@@ -1,68 +1,59 @@
-import { WebSocketServer, WebSocket } from "ws";
+import { createServer } from "http";
+import { Server, type Socket } from "socket.io";
 import { getState } from "../state.js";
 
 const WS_PORT = 8080;
 
-let wss: WebSocketServer | null = null;
-const clients = new Set<WebSocket>();
+let io: Server | null = null;
 
-function replayState(ws: WebSocket): void {
+function replayState(socket: Socket): void {
   const state = getState();
-  const send = (msg: unknown) => ws.send(JSON.stringify(msg));
 
   if (state.scene) {
-    send({ type: "load_scene", payload: { id: state.scene } });
+    socket.emit("load_scene", { id: state.scene });
   }
   for (const body of state.bodies) {
-    send({ type: "set_body", payload: body });
+    socket.emit("set_body", body);
   }
   for (const label of state.labels) {
-    send({ type: "add_label", payload: label });
+    socket.emit("add_label", label);
   }
   if (state.camera) {
-    send({ type: "set_camera", payload: state.camera });
+    socket.emit("set_camera", state.camera);
   }
   const actionMap: Record<string, string> = { playing: "play", paused: "pause", stopped: "stop" };
-  send({ type: "control_sim", payload: { action: actionMap[state.playback] ?? "stop", timeScale: state.timeScale } });
+  socket.emit("control_sim", {
+    action: actionMap[state.playback] ?? "stop",
+    timeScale: state.timeScale,
+  });
 }
 
-export function startWsServer(): WebSocketServer {
-  wss = new WebSocketServer({ port: WS_PORT });
-
-  wss.on("listening", () => {
-    console.error(`[orbital-ws] listening on ws://localhost:${WS_PORT}`);
+export function startSocketServer(): Server {
+  const httpServer = createServer();
+  io = new Server(httpServer, {
+    cors: { origin: "*" },
   });
 
-  wss.on("error", (err) => {
-    console.error(`[orbital-ws] server error: ${err.message}`);
-    if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
-      console.error(`[orbital-ws] port ${WS_PORT} already in use — broadcasts disabled`);
-    }
-  });
+  io.on("connection", (socket) => {
+    console.error(`[orbital-sio] client connected: ${socket.id}`);
+    replayState(socket);
 
-  wss.on("connection", (ws) => {
-    clients.add(ws);
-    console.error(`[orbital-ws] client connected (total: ${clients.size})`);
-    replayState(ws);
-
-    ws.on("message", (data) => {
-      console.error("[orbital-ws] message from sim:", data.toString());
-    });
-
-    ws.on("close", () => {
-      clients.delete(ws);
-      console.error(`[orbital-ws] client disconnected (total: ${clients.size})`);
+    socket.on("disconnect", (reason) => {
+      console.error(`[orbital-sio] client disconnected: ${socket.id} (${reason})`);
     });
   });
 
-  return wss;
+  httpServer.listen(WS_PORT, () => {
+    console.error(`[orbital-sio] listening on http://localhost:${WS_PORT}`);
+  });
+
+  httpServer.on("error", (err) => {
+    console.error(`[orbital-sio] server error: ${err.message}`);
+  });
+
+  return io;
 }
 
-export function broadcast(message: unknown): void {
-  const payload = JSON.stringify(message);
-  for (const client of clients) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(payload);
-    }
-  }
+export function broadcast(type: string, payload: unknown): void {
+  io?.emit(type, payload);
 }
