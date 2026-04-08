@@ -5,7 +5,13 @@ import { OrbitControls, useTexture } from "@react-three/drei";
 import { StarField } from "@astrophysics-playground/ui/three";
 import { connectBridge } from "./ws/bridge";
 import { useSimStore, type Body } from "./store";
+import { useVisibilityStore } from "./store/visibility";
 import { KeyboardControls, jkRef, selectedBodyIdRef } from "./KeyboardControls";
+import { PlanetLabel } from "./components/PlanetLabel";
+import { PlanetInfoPanel } from "./components/PlanetInfoPanel";
+import { ControlsPanel } from "./components/ControlsPanel";
+import { useOrbitalAnimation, getAxialTilt, getOrbitRadius } from "./hooks/useOrbitalAnimation";
+import { ORBITAL_MAP } from "./data/orbitalElements";
 
 // Visual radius multiplier so planets are large enough to see
 const PLANET_SCALE = 8;
@@ -81,6 +87,33 @@ const MOON_SYSTEMS: Record<string, MoonDef[]> = {
   ],
 };
 
+// ── Atmospheric glow colors per planet ────────────────────────────────────────
+const PLANET_GLOW_COLORS: Record<string, string> = {
+  mercury: "#b5b5b5",
+  venus:   "#e8cda0",
+  earth:   "#4fa3e0",
+  mars:    "#c1440e",
+  jupiter: "#c88b3a",
+  saturn:  "#e8d5a1",
+  uranus:  "#7de8e8",
+  neptune: "#5b5ddf",
+};
+
+function AtmosphericGlow({ radius, color }: { radius: number; color: string }) {
+  return (
+    <mesh>
+      <sphereGeometry args={[radius * 1.08, 32, 32]} />
+      <meshBasicMaterial
+        color={color}
+        transparent
+        opacity={0.12}
+        side={THREE.BackSide}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
 // ── Saturn rings ──────────────────────────────────────────────────────────────
 function SaturnRingsInner({ innerRadius, outerRadius }: { innerRadius: number; outerRadius: number }) {
   const [colorMap, alphaMap] = useTexture([
@@ -126,16 +159,30 @@ function SunInner({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Bo
 
   return (
     <group position={pos} onClick={onSelectBody ? (e) => { e.stopPropagation(); onSelectBody(body); } : undefined}>
+      {/* Core sun sphere */}
       <mesh>
         <sphereGeometry args={[body.radius, 48, 48]} />
         <meshStandardMaterial
           map={texture}
           emissiveMap={texture}
           emissive={new THREE.Color(body.color)}
-          emissiveIntensity={1.5}
+          emissiveIntensity={3.0}
         />
       </mesh>
-      <pointLight color="#ffffff" intensity={150} decay={1} />
+      {/* Corona glow layers — additive, no depth test so they always show as halos */}
+      <mesh renderOrder={1}>
+        <sphereGeometry args={[body.radius * 1.6, 32, 32]} />
+        <meshBasicMaterial color="#FDB813" transparent opacity={0.18} depthWrite={false} depthTest={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <mesh renderOrder={2}>
+        <sphereGeometry args={[body.radius * 2.4, 32, 32]} />
+        <meshBasicMaterial color="#ff8800" transparent opacity={0.09} depthWrite={false} depthTest={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <mesh renderOrder={3}>
+        <sphereGeometry args={[body.radius * 3.5, 32, 32]} />
+        <meshBasicMaterial color="#ff5500" transparent opacity={0.04} depthWrite={false} depthTest={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <pointLight color="#ffffff" intensity={300} decay={1} />
     </group>
   );
 }
@@ -149,7 +196,7 @@ function Sun({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Body) =
           <sphereGeometry args={[body.radius, 48, 48]} />
           <meshStandardMaterial color={body.color} emissive={new THREE.Color(body.color)} emissiveIntensity={3} />
         </mesh>
-        <pointLight color="#ffffff" intensity={150} decay={1} />
+        <pointLight color="#ffffff" intensity={300} decay={1} />
       </group>
     }>
       <SunInner body={body} onSelectBody={onSelectBody} />
@@ -182,9 +229,11 @@ function EarthCloudsInner({ r }: { r: number }) {
 }
 
 // ── Planet ────────────────────────────────────────────────────────────────────
-function PlanetInner({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Body) => void }) {
+function PlanetInner({ body, position, onSelectBody }: { body: Body; position?: THREE.Vector3; onSelectBody?: (body: Body) => void }) {
   const r = Math.max(body.radius * PLANET_SCALE, MIN_RADIUS);
-  const pos = body.position as [number, number, number];
+  const pos: [number, number, number] = position
+    ? [position.x, position.y, position.z]
+    : (body.position as [number, number, number]);
   const isEarth = body.id === "earth";
   const meshRef = useRef<THREE.Mesh>(null);
 
@@ -241,13 +290,18 @@ function PlanetInner({ body, onSelectBody }: { body: Body; onSelectBody?: (body:
           outerRadius={rings.outerRadius * PLANET_SCALE}
         />
       )}
+      {PLANET_GLOW_COLORS[body.id] && (
+        <AtmosphericGlow radius={r} color={PLANET_GLOW_COLORS[body.id]} />
+      )}
     </group>
   );
 }
 
-function Planet({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Body) => void }) {
+function Planet({ body, position, onSelectBody }: { body: Body; position?: THREE.Vector3; onSelectBody?: (body: Body) => void }) {
   const r = Math.max(body.radius * PLANET_SCALE, MIN_RADIUS);
-  const pos = body.position as [number, number, number];
+  const pos: [number, number, number] = position
+    ? [position.x, position.y, position.z]
+    : (body.position as [number, number, number]);
   return (
     <Suspense fallback={
       <mesh position={pos} onClick={onSelectBody ? (e) => { e.stopPropagation(); onSelectBody(body); } : undefined}>
@@ -255,7 +309,7 @@ function Planet({ body, onSelectBody }: { body: Body; onSelectBody?: (body: Body
         <meshStandardMaterial color={body.color} roughness={0.85} metalness={0} />
       </mesh>
     }>
-      <PlanetInner body={body} onSelectBody={onSelectBody} />
+      <PlanetInner body={body} position={position} onSelectBody={onSelectBody} />
     </Suspense>
   );
 }
@@ -321,10 +375,13 @@ function MoonBody({ moon, startAngle }: { moon: MoonDef; startAngle: number }) {
 }
 
 // ── Moon system (all moons for one planet) ────────────────────────────────────
-function MoonSystem({ body }: { body: Body }) {
+function MoonSystem({ body, position }: { body: Body; position?: THREE.Vector3 }) {
   const moons = MOON_SYSTEMS[body.id];
   if (!moons) return null;
-  const pos = body.position as [number, number, number];
+  // Use provided computed orbital position, or fall back to body.position (MCP-set scenes)
+  const pos: [number, number, number] = position
+    ? [position.x, position.y, position.z]
+    : (body.position as [number, number, number]);
 
   // Stable random start angles per moon (seeded by index)
   const startAngles = useMemo(
@@ -381,9 +438,10 @@ function AsteroidBelt() {
 }
 
 // ── Orbit ring ────────────────────────────────────────────────────────────────
-function OrbitRing({ body }: { body: Body }) {
+function OrbitRing({ body, orbitRadius }: { body: Body; orbitRadius?: number }) {
   const [bx, , bz] = body.position;
-  const r = Math.sqrt(bx * bx + bz * bz);
+  // Prefer the pre-computed orbital radius; fall back to current body.position for MCP-set bodies
+  const r = orbitRadius ?? Math.sqrt(bx * bx + bz * bz);
   if (r < 1) return null;
 
   const positions = useMemo(() => {
@@ -469,19 +527,41 @@ function AutoFit({ controlsRef }: { controlsRef: React.RefObject<{ target: THREE
 }
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
+// Scenes where Keplerian orbital animation is applied.
+// For other scenes (custom MCP scenes), body.position from the store is used directly.
+const ORBITAL_SCENES = new Set(["solar-system", "earth-moon"]);
+
 function SceneContent({
   onFocusBody,
   onSelectBody,
   onManualControl,
+  labelsVisible,
 }: {
   onFocusBody: (name: string | null) => void;
   onSelectBody: (body: Body) => void;
   onManualControl: () => void;
+  labelsVisible: boolean;
 }) {
   const bodies = useSimStore((s) => s.bodies);
+  const scene = useSimStore((s) => s.scene);
+  const tickTime = useSimStore((s) => s.tickTime);
+  const timeScale = useSimStore((s) => s.timeScale);
+  const playback = useSimStore((s) => s.playback);
+  const simTime = useSimStore((s) => s.simTime);
+  const { getOrbitPosition } = useOrbitalAnimation();
+
   const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null);
   const sun = bodies.find((b) => b.id === "sun");
   const planets = bodies.filter((b) => b.id !== "sun");
+  const { orbitPaths, asteroidBelt } = useVisibilityStore();
+
+  // Advance simulation time every frame when playing
+  useFrame((_, delta) => {
+    if (playback === "playing") tickTime(delta * timeScale);
+  });
+
+  // Whether this scene uses Keplerian orbital positions
+  const useKeplerian = scene !== null && ORBITAL_SCENES.has(scene);
 
   return (
     <>
@@ -489,15 +569,57 @@ function SceneContent({
       <ambientLight intensity={0.06} />
       <StarField count={20000} />
 
-      {sun && <Sun body={sun} onSelectBody={onSelectBody} />}
-      {planets.map((body) => (
-        <group key={body.id}>
-          <Planet body={body} onSelectBody={onSelectBody} />
-          <OrbitRing body={body} />
-          <MoonSystem body={body} />
-        </group>
-      ))}
-      <AsteroidBelt />
+      {sun && (
+        <>
+          <Sun body={sun} onSelectBody={onSelectBody} />
+          <PlanetLabel
+            name={sun.name}
+            position={sun.position as [number, number, number]}
+            radius={sun.radius}
+            visible={labelsVisible}
+          />
+        </>
+      )}
+      {planets.map((body) => {
+        // Compute orbital position if this is a Keplerian scene and the body has elements
+        const hasElements = ORBITAL_MAP.has(body.id);
+        const orbPos = useKeplerian && hasElements
+          ? getOrbitPosition(body.id, simTime)
+          : undefined;
+
+        // Axial tilt in radians — only applied in Keplerian scenes
+        const tiltRad = useKeplerian && hasElements
+          ? (getAxialTilt(body.id) * Math.PI) / 180
+          : 0;
+
+        // Orbit ring radius: use semi-major axis for Keplerian, else derive from body.position
+        const ringRadius = useKeplerian && hasElements
+          ? getOrbitRadius(body.id)
+          : undefined;
+
+        const r = Math.max(body.radius * PLANET_SCALE, MIN_RADIUS);
+        const labelPos: [number, number, number] = orbPos
+          ? [orbPos.x, orbPos.y, orbPos.z]
+          : (body.position as [number, number, number]);
+
+        return (
+          <group key={body.id}>
+            {/* Axial tilt wrapper — tilts the planet (and its rings) around local X */}
+            <group rotation={[tiltRad, 0, 0]}>
+              <Planet body={body} position={orbPos} onSelectBody={onSelectBody} />
+            </group>
+            {orbitPaths && <OrbitRing body={body} orbitRadius={ringRadius} />}
+            <MoonSystem body={body} position={orbPos} />
+            <PlanetLabel
+              name={body.name}
+              position={labelPos}
+              radius={r}
+              visible={labelsVisible}
+            />
+          </group>
+        );
+      })}
+      {asteroidBelt && <AsteroidBelt />}
 
       <OrbitControls
         ref={controlsRef as React.RefObject<never>}
@@ -626,10 +748,12 @@ function ShortcutsPanel({ visible, onClose }: { visible: boolean; onClose: () =>
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const { playback, simTime, bodies } = useSimStore();
+  const labelsVisible = useVisibilityStore((s) => s.labels);
   const [focusedBody, setFocusedBody] = useState<string | null>(null);
   const [hudVisible, setHudVisible] = useState(false);
   const [shortcutsVisible, setShortcutsVisible] = useState(false);
   const [helpHovered, setHelpHovered] = useState(false);
+  const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleFocusBody = useCallback((name: string | null) => {
@@ -651,6 +775,8 @@ export default function App() {
     // Trigger focus animation via the module-level ref set by KeyboardControls
     const focusFn = (window as unknown as Record<string, unknown>).__focusBodyById as ((id: string) => void) | undefined;
     if (focusFn) focusFn(body.id);
+    // Open info panel for the clicked body
+    setSelectedPlanet(body.id);
   }, []);
 
   // Toggle shortcuts panel on "?" keypress
@@ -686,6 +812,7 @@ export default function App() {
           onFocusBody={handleFocusBody}
           onSelectBody={handleSelectBody}
           onManualControl={handleManualControl}
+          labelsVisible={labelsVisible}
         />
       </Canvas>
 
@@ -727,6 +854,15 @@ export default function App() {
       >
         {focusedBody ?? ""}
       </div>
+
+      {/* Planet info panel — right side, centered vertically */}
+      <PlanetInfoPanel
+        planetId={selectedPlanet}
+        onClose={() => setSelectedPlanet(null)}
+      />
+
+      {/* Controls panel — bottom left */}
+      <ControlsPanel />
 
       {/* Shortcuts panel (rendered above button) */}
       <ShortcutsPanel

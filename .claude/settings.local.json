@@ -81,7 +81,8 @@
       "mcp__orbital__list_scenes",
       "mcp__orbital__get_sim_state",
       "Bash(curl -s http://localhost:5174)",
-      "Bash(pkill -f \"orbital/dist/index.js\")"
+      "Bash(pkill -f \"orbital/dist/index.js\")",
+      "Bash(git -C /Users/yab/Projects/science-project-01 worktree list)"
     ]
   },
   "enableAllProjectMcpServers": true,
